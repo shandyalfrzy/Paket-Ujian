@@ -47,7 +47,7 @@ Guru bisa menghasilkan 3 paket setara dari 50 soal sumber tanpa menulis ulang so
 - PDF hasil scan atau OCR.
 - Soal dengan rumus, gambar, atau diagram.
 - Editor soal di dalam web (guru hanya setuju atau tolak).
-- Ujian daring, penilaian siswa, dan manajemen kelas.
+- Ujian daring dan manajemen kelas. Penilaian dibatasi pada koreksi pilihan ganda terhadap paket yang dibuat PaketUjian sendiri (F11-F12, prioritas P1), bukan platform penilaian umum.
 
 ## 3. Target Pengguna
 
@@ -69,13 +69,16 @@ Cakupan mata pelajaran: PPKn (Pendidikan Pancasila di Kurikulum Merdeka) sebagai
 7. Sebagai guru, saya ingin diberi tahu jelas jika PDF tidak sesuai format.
 8. Sebagai pengunjung expo, saya ingin mencoba dengan PDF contoh tanpa menyiapkan file.
 9. Sebagai pengunjung expo, saya ingin melihat hasil nyata yang sudah tersimpan agar demo tetap jalan walau kuota AI habis.
+10. (P1) Sebagai guru, saya ingin memasukkan jawaban siswa untuk paket yang sudah dibuat dan langsung mendapat skor serta rincian benar/salah per nomor, agar tidak mengoreksi satu per satu secara manual.
+11. (P1) Sebagai guru, saya ingin mengunggah foto lembar jawab dan melihat jawaban terbaca otomatis yang bisa saya perbaiki sebelum disimpan, agar input jawaban lebih cepat.
+12. (P1) Sebagai guru, saya ingin melihat ringkasan kelas (rata-rata, nomor yang paling sering salah) agar tahu materi mana yang perlu diulang.
 
 ## 4. Identifikasi Kebutuhan dan Fitur Utama
 
 | Prioritas | Fitur |
 | --- | --- |
 | P0 (wajib) | Upload dan validasi PDF · Parsing ke data terstruktur · Analisis soal sumber · Generate varian · Verifikasi dengan loop perbaikan · Antrean dan progres per soal · Review setuju/tolak · Rakit paket dan ekspor · Mode demo · Log panggilan LLM |
-| P1 (menyusul) | Soal berbasis wacana · Laporan kesetaraan antar paket · Cadangan penyedia LLM otomatis · Riwayat pekerjaan · Materi ajar sebagai acuan |
+| P1 (menyusul) | **Koreksi ujian (manual F11, dari foto lembar jawab F12)** · Soal berbasis wacana · Laporan kesetaraan antar paket · Cadangan penyedia LLM otomatis · Riwayat pekerjaan · Materi ajar sebagai acuan |
 | P2 (tidak dibangun sekarang) | Esai/isian, PDF scan, soal rumus/gambar, akun multi-guru, integrasi platform ujian |
 
 ## 5. User Flow
@@ -89,6 +92,18 @@ Beranda -> Upload PDF + pilih jumlah versi (2/3)
    -> Halaman Review (soal baru berdampingan dengan soal sumber: setuju / tolak)
         tolak -> regenerasi 1x -> verifikasi -> muncul lagi di Review
    -> Halaman Unduh (paket, kunci jawaban, lembar jawab dalam PDF/Word)
+```
+
+**Alur koreksi (P1, setelah ujian dilaksanakan)**
+
+```
+Halaman Koreksi -> pilih paket (A/B/C) milik bank soal yang sudah dirakit
+   -> pilih cara input jawaban siswa:
+        a) ketik manual (F11), atau
+        b) unggah foto lembar jawab (F12) -> jawaban terbaca tampil di tabel
+           -> guru memeriksa dan memperbaiki yang salah baca / ditandai "perlu dicek"
+   -> simpan -> skor dan rincian benar/salah per nomor
+   -> Ringkasan kelas (rata-rata, nomor paling sering salah)
 ```
 
 **Pipeline agen di belakang layar**
@@ -121,6 +136,15 @@ Status per soal varian: `dibuat -> diverifikasi -> perlu_perbaikan -> lolos -> d
 | F9 | Mode demo | Ada PDF contoh dan tombol memutar ulang hasil nyata tersimpan, sehingga demo jalan saat kuota API habis. |
 | F10 | Log panggilan LLM | Tiap panggilan mencatat penyedia, model, peran agen, prompt, respons, durasi, hasil verifikasi. Log menjadi sumber data evaluasi. |
 
+### Kebutuhan fungsional tambahan (P1: dikerjakan hanya setelah P0 selesai)
+
+| ID | Kebutuhan | Kriteria penerimaan |
+| --- | --- | --- |
+| F11 | Koreksi dengan input jawaban manual | Guru memilih paket yang sudah dirakit lalu memasukkan jawaban A-E per nomor untuk tiap siswa. Sistem membandingkan dengan **kunci akhir paket setelah pengacakan opsi (F8)**, lalu menampilkan skor dan benar/salah per nomor. Siswa diidentifikasi dengan kode atau nomor absen, bukan nama. Ringkasan kelas menampilkan rata-rata dan nomor yang paling sering salah. |
+| F12 | Koreksi dari foto lembar jawab (eksperimental) | Guru mengunggah foto lembar jawab yang dibuat dari F8. Model vision membaca jawaban per nomor menjadi JSON dan divalidasi skema. Hasil **selalu** ditampilkan di tabel yang bisa diperbaiki guru sebelum disimpan. Nomor yang kosong, ganda, atau tidak terbaca ditandai "perlu dicek". **Syarat mulai dibangun:** spike dengan foto uji lolos ambang akurasi (lihat bagian 12). Jika spike gagal, F12 dibatalkan dan F11 menjadi satu-satunya jalur koreksi. |
+
+Prasyarat di F8: lembar jawab dirancang agar mudah dibaca mesin (kode paket tercetak di kepala lembar, kotak jawaban besar dan berjarak, satu halaman, area identitas siswa terpisah). Sistem menyimpan urutan opsi dan kunci akhir tiap paket setelah pengacakan, karena koreksi bergantung padanya.
+
 ## 7. Kebutuhan Nonfungsional
 
 | Aspek | Kebutuhan |
@@ -128,7 +152,7 @@ Status per soal varian: `dibuat -> diverifikasi -> perlu_perbaikan -> lolos -> d
 | Biaya | Rp0. Hanya jatah gratis API dan infrastruktur lokal. |
 | Kuota | Cache analisis, antrean dengan jeda antar panggilan, retry dengan backoff untuk HTTP 429, batas percobaan perbaikan. |
 | Kinerja | 50 soal x 3 versi selesai dalam 15 menit atau kurang (usulan, dikalibrasi setelah uji). |
-| Privasi | Soal untuk demo dan evaluasi harus publik atau buatan sendiri. Tidak ada data siswa. |
+| Privasi | Soal untuk demo dan evaluasi harus publik atau buatan sendiri. Tidak ada data siswa yang dikirim ke penyedia LLM. Pada fitur koreksi, lembar jawab memakai kode siswa; area identitas tidak dikirim ke model (dipotong atau tidak difoto) dan data siswa hanya disimpan di database lokal. Untuk demo dan evaluasi, pakai lembar jawab buatan sendiri. |
 | Keandalan | PDF tidak sesuai format, penyedia LLM kena batas, atau respons bukan JSON valid tidak boleh membuat pekerjaan macet tanpa pesan. |
 | Keterlacakan | Setiap varian dapat ditelusuri ke soal sumber, prompt, dan hasil verifikasinya. |
 | Keterpakaian | Alur guru maksimal empat langkah. Tampilan responsif untuk laptop; layar demo expo terbaca dari jarak dekat. |
@@ -195,6 +219,24 @@ Paket siap: A (47 soal)  B (46 soal)  C (45 soal)
 Ringkasan: 3 soal gagal verifikasi dan tidak dimasukkan
 ```
 
+**Halaman Koreksi (P1)**
+
+```
+Koreksi ujian    Bank soal: PPKn-Kelas-X     Paket: [B v]
++---------------------------------------------------------+
+| Input jawaban:  (o) Ketik manual   ( ) Foto lembar jawab|
+|                                                         |
+| Siswa: [kode/no. absen: 07]         [Unggah foto]       |
+| No | Jawaban terbaca | Kunci | Hasil                    |
+| 1  | C               | C     | benar                    |
+| 2  | B               | D     | salah                    |
+| 3  | ?  (perlu dicek)| A     | -                        |
+| ...                                                     |
+|                              Skor: 38/46      [Simpan]  |
++---------------------------------------------------------+
+Ringkasan kelas: rata-rata 31,2 | paling sering salah: no. 12, 27
+```
+
 ## 9. Arsitektur dan Stack Teknologi
 
 | Teknologi | Peran |
@@ -214,6 +256,7 @@ Pilihan pendukung:
 | Pekerjaan latar belakang | Laravel Queue, driver database (tanpa Redis) |
 | Progres otomatis | Polling dari Vue lewat Inertia (partial reload) |
 | Ekspor | DomPDF (PDF), PhpWord (Word) |
+| Koreksi lembar jawab (P1) | Model vision lewat `LlmClient` (misalnya Gemini) dengan output JSON terstruktur. Perlu diuji dulu, lihat F12. |
 | Deploy untuk expo | Jalan lokal (`php artisan serve` dan `queue:work`) |
 
 > Catatan: dokumen ide awal memakai Livewire/Blade. Keputusan stack di PRD ini menggantinya dengan Vue + Inertia sesuai ketentuan tugas.
@@ -228,6 +271,10 @@ Pilihan pendukung:
 | `paket` | Versi A/B/C dan status perakitan |
 | `soal_varian` | Isi soal baru, opsi, kunci, status, jumlah percobaan, alasan gagal, keputusan guru |
 | `llm_log` | Penyedia, model, peran agen, prompt, respons, durasi, hasil |
+| `hasil_koreksi` (P1) | Paket, kode siswa, skor, sumber input (manual/foto), waktu |
+| `jawaban_siswa` (P1) | Hasil koreksi, nomor, jawaban terbaca, jawaban akhir setelah dicek guru, status (terbaca/perlu dicek), benar/salah |
+
+Tabel `paket` atau `soal_varian` juga menyimpan urutan opsi dan kunci akhir setelah pengacakan (F8), karena dipakai untuk koreksi.
 
 ## 11. Pilihan LLM API
 
@@ -256,6 +303,8 @@ Semua target adalah usulan awal dan dikalibrasi setelah uji.
 | Disetujui reviewer | Disetujui / ditinjau | Dilaporkan apa adanya |
 | Waktu pekerjaan | 50 soal x 3 versi | <= 15 menit |
 | Biaya | Total pengeluaran | Rp0 |
+| Akurasi baca lembar jawab (P1, F12) | Nomor terbaca benar / total nomor, pada foto uji (berbagai cahaya dan sudut) | Ambang ditetapkan setelah spike; usulan awal >= 95% dan belum divalidasi |
+| Kecocokan skor koreksi (P1) | Skor sistem dibanding hitungan manual pada sampel lembar jawab | 100% pada input yang sudah dicek guru |
 
 **Evaluasi tanpa akses guru:** penilaian utama memakai model AI berbeda dengan rubrik tertulis. Keterbatasannya harus ditulis jujur di laporan: penilaian AI atas keluaran AI bisa sirkular dan cenderung terlalu permisif. Penguat: sampel manual tim (sekitar 30 soal acak), penilai manusia bila ada (dosen, kakak tingkat, guru kenalan), dan angka dari `llm_log`.
 
@@ -271,6 +320,9 @@ Semua target adalah usulan awal dan dikalibrasi setelah uji.
 | Data bocor lewat tier gratis | Hanya soal publik atau buatan sendiri |
 | Scope creep, tim 5 orang tidak sinkron | Non-tujuan sebagai pagar, P1 hanya setelah P0 selesai, rapat singkat mingguan |
 | Sisa waktu lebih pendek dari rencana awal | Jadwal disesuaikan di bagian 14, P0 yang bisa disederhanakan dipotong |
+| Foto lembar jawab salah terbaca (cahaya, sudut, tulisan tangan, bulatan terisi) | Lembar jawab dirancang ramah mesin, guru selalu memeriksa hasil sebelum disimpan, tanda "perlu dicek", spike sebelum dibangun, F11 sebagai jalur cadangan |
+| Lembar jawab berisi data siswa dikirim ke penyedia LLM | Identitas tidak difoto atau dipotong sebelum dikirim, pakai kode siswa, demo hanya dengan lembar jawab buatan sendiri |
+| Koreksi menambah beban di tengah tenggat | Statusnya P1: baru dikerjakan setelah alur P0 jalan; F11 dulu, F12 hanya jika spike lolos |
 
 ## 14. Rencana Kerja
 
@@ -306,3 +358,5 @@ Pembagian peran usulan (5 orang): (1) ekstraksi PDF dan format input; (2) agen g
 | 6 | Penilai manusia untuk sampel evaluasi? | Tidak |
 | 7 | Apakah dosen mensyaratkan jumlah agen atau format laporan tertentu? | Tidak |
 | 8 | Fitur login bawaan starter kit dipertahankan atau dihapus untuk MVP? | Tidak |
+| 9 | Apakah model vision penyedia gratis yang dipilih cukup akurat membaca foto lembar jawab? (uji dengan 10-20 foto) | Ya, sebelum F12 dibangun |
+| 10 | Bentuk lembar jawab yang dipakai: kotak huruf tulisan tangan atau bulatan yang diarsir? | Ya, untuk desain F8 dan spike F12 |
